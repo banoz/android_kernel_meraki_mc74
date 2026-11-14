@@ -70,6 +70,8 @@ subdir-ccflags-$(CONFIG_MACH_CAPRI_STONE) += -Iarch/arm/mach-capri/hw_cfg/CAPRI_
 						-Iarch/arm/mach-capri/hw_cfg/BASE
 subdir-ccflags-$(CONFIG_MACH_CAPRI_RAY) += -Iarch/arm/mach-capri/hw_cfg/CAPRI_RAY \
 						-Iarch/arm/mach-capri/hw_cfg/BASE
+subdir-ccflags-$(CONFIG_MACH_CAPRI_ME1) += -Iarch/arm/mach-capri/hw_cfg/CAPRI_ME1 \
+						-Iarch/arm/mach-capri/hw_cfg/BASE
 subdir-ccflags-$(CONFIG_MACH_CAPRI_TABLET) += -Iarch/arm/mach-capri/hw_cfg/CAPRI_TABLET \
 			-Iarch/arm/mach-capri/hw_cfg/BASE
 subdir-ccflags-$(CONFIG_MACH_CAPRI_SS) += -Iarch/arm/mach-capri/hw_cfg/CAPRI_SS \

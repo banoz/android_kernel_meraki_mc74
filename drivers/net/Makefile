@@ -311,3 +311,4 @@ obj-$(CONFIG_CAIF) += caif/
 obj-$(CONFIG_OCTEON_MGMT_ETHERNET) += octeon/
 obj-$(CONFIG_PCH_GBE) += pch_gbe/
 obj-$(CONFIG_TILE_NET) += tile/
+obj-$(CONFIG_NET_KONA_ESUB_MC74) += kona_esub_mc74.o

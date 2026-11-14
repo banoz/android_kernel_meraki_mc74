@@ -350,4 +350,8 @@ config TOUCHKEY_BACKLIGHT
 
 endif # BACKLIGHT_CLASS_DEVICE
 
+config BACKLIGHT_MP3309_MC74
+	tristate "MPS MP3309 backlight (I2C dimming, Meraki MC74)"
+	depends on BACKLIGHT_CLASS_DEVICE && I2C
+
 endif # BACKLIGHT_LCD_SUPPORT

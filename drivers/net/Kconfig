@@ -2540,6 +2540,13 @@ config S6GMAC
 	  To compile this driver as a module, choose M here. The module
 	  will be called s6gmac.
 
+config NET_KONA_ESUB_MC74
+	tristate "Broadcom Kona ESUB Ethernet (MC74, mainline backport)"
+	depends on ARCH_CAPRI
+	help
+	  Polled driver for the Capri ESUB switch on the Meraki MC74; relies on
+	  u-boot having brought up the ESUB clocks and PHYs.
+
 config NET_ISLAND
 	tristate "Broadcom Island Gigabit Ethernet support"
 	depends on ARCH_ISLAND || ARCH_CAPRI

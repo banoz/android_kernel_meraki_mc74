@@ -365,7 +365,11 @@ void vc_framebuffer_snapshot(int action)
 }
 EXPORT_SYMBOL(vc_framebuffer_snapshot);
 
+#ifdef CONFIG_MACH_CAPRI_ME1
+#define DEFAULT_STATIC_FB_DUMP	 "/data/local/tmp/fb-dump"
+#else
 #define DEFAULT_STATIC_FB_DUMP	 "/sdcard/fb-dump"
+#endif
 static void vc_framebuffer_snapshot_dump(void)
 {
 	int fd = -1;
@@ -1874,6 +1878,72 @@ out:
 	return 0;
 }
 
+#ifdef CONFIG_MACH_CAPRI_ME1
+#include "mc74_splash.h"
+/*
+ * MC74: u-boot's bootcmd starts a black VideoCore framebuffer ("vc display
+ * fb init; fb update 0") that stays on the panel until Android draws. Paint
+ * the stock splash (the VC firmware's Cisco Meraki logo) into it as soon as
+ * the VC link is up, so the boot shows the logo instead of a black screen.
+ */
+static int mc74_splash = 1;
+module_param(mc74_splash, int, 0444);
+
+/*
+ * u-boot's "vc display fb init" always gets the same buffers on the MC74
+ * (the dashboard's simple-framebuffer relies on that too): buffer 0 is at
+ * ARM 0x843f0ba0, 800x1280 RGBA, pitch 3200. A second FB_INIT from Linux is
+ * refused (result 4), so paint buffer 0 directly and ask for an update.
+ */
+#define MC74_UBOOT_FB0_PA	0x843f0ba0
+#define MC74_FB_W		800
+#define MC74_FB_H		1280
+#define MC74_FB_PITCH		3200
+
+static void mc74_boot_splash(void)
+{
+	void __iomem *fb;
+	uint32_t y, x;
+	const unsigned char *rle = mc74_splash_rle;
+	int run = 0, val = 0, rc;
+
+	if (!mc74_splash)
+		return;
+	fb = ioremap_nocache(MC74_UBOOT_FB0_PA, MC74_FB_PITCH * MC74_FB_H);
+	if (!fb) {
+		LOG_ERR("mc74: can't map the boot framebuffer");
+		return;
+	}
+	for (y = 0; y < MC74_FB_H; y++) {
+		void __iomem *row = fb + y * MC74_FB_PITCH;
+
+		for (x = 0; x < MC74_FB_W; x++) {
+			uint32_t v = 0;
+
+			if (y >= MC74_SPLASH_Y && y < MC74_SPLASH_Y + MC74_SPLASH_H &&
+			    x >= MC74_SPLASH_X && x < MC74_SPLASH_X + MC74_SPLASH_W) {
+				if (!run) {
+					run = rle[0];
+					val = rle[1];
+					rle += 2;
+				}
+				run--;
+				v = val | (val << 8) | (val << 16);
+			}
+			writel(v | 0xff000000, row + x * 4);	/* R,G,B,A bytes */
+		}
+	}
+	iounmap(fb);
+
+	memset(&display_local, 0, sizeof(display_local));
+	display_local.command = DISPLAY_IPC_FB_UPDATE;
+	display_local.display_number = 0;
+	display_local.request.fb_update.use_buffer = 0;
+	rc = vc_display_send(1, 500);
+	LOG_INFO("mc74: boot splash drawn (update rc %d result %d)", rc, display_local.result);
+}
+#endif
+
 static void vc_fb_connected_init(void)
 {
 	int ret;
@@ -1972,6 +2042,9 @@ err_free_mem:
 
 out:
 	LOG_INFO("%s: end (ret=%d)", __func__, ret);
+#ifdef CONFIG_MACH_CAPRI_ME1
+	mc74_boot_splash();
+#endif
 }
 
 static int __init vc_fb_init(void)

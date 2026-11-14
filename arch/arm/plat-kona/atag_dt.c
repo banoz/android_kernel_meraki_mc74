@@ -52,9 +52,13 @@ static int __init early_init_dt_scan_kona_root(unsigned long node,
 	return 1;
 }
 
-static int __init parse_tag_dt(const struct tag *tag)
+int kona_dtblob_seen;
+
+int __init kona_parse_tag_dt(const struct tag *tag)
 {
 	unsigned long dt_root;
+
+	kona_dtblob_seen = 1;
 
 	/* set DT base address so we can use kernel flat tree API */
 	initial_boot_params =
@@ -92,4 +96,4 @@ static int __init parse_tag_dt(const struct tag *tag)
 	return 0;
 }
 
-__tagtable(ATAG_DTBLOB, parse_tag_dt);
+__tagtable(ATAG_DTBLOB, kona_parse_tag_dt);

@@ -143,6 +143,13 @@ CFLAGS_board_ray.o += -Iarch/arm/mach-capri/hw_cfg/CAPRI_RAY \
 -Idrivers/videocore/interface/vceb/host \
 -Idrivers/videocore/interface/vceb/host/linux
 
+obj-$(CONFIG_MACH_CAPRI_ME1) += board_me1.o pinmux_me1.o board-capri-wifi.o mc74_stubs.o
+CFLAGS_board_me1.o += -Iarch/arm/mach-capri/hw_cfg/CAPRI_ME1 \
+-Iarch/arm/mach-capri/hw_cfg/BASE \
+-Idrivers/videocore/host_support/include \
+-Idrivers/videocore/interface/vceb/host \
+-Idrivers/videocore/interface/vceb/host/linux
+
 obj-$(CONFIG_MACH_CAPRI_GARNET) += board_garnet.o pinmux_garnet.o board-capri-wifi.o
 CFLAGS_board_garnet.o += -Iarch/arm/mach-capri/hw_cfg/CAPRI_GARNET \
 -Iarch/arm/mach-capri/hw_cfg/BASE \

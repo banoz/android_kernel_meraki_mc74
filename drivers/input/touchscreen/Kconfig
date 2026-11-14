@@ -854,4 +854,11 @@ config TOUCHSCREEN_SCALE
 source "drivers/input/touchscreen/cypress_touchkey/Kconfig"
 source "drivers/input/touchscreen/coreriver_touchkey/Kconfig"
 
+config TOUCHSCREEN_CYTTSP5_MC74
+	tristate "Cypress TrueTouch Gen5 (mainline backport for the MC74)"
+	depends on I2C
+	select CRC_ITU_T
+	help
+	  Parade/Cypress TTSP5 touch controller on the Meraki MC74.
+
 endif

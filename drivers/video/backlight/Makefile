@@ -40,3 +40,4 @@ obj-$(CONFIG_BACKLIGHT_PCF50633)	+= pcf50633-backlight.o
 obj-$(CONFIG_BACKLIGHT_KTD3102) += ktd_bl.o
 obj-$(CONFIG_BACKLIGHT_KTD3103) += ktd3103_bl.o
 obj-$(CONFIG_TOUCHKEY_BACKLIGHT)	+= bcm_touchkey_led.o
+obj-$(CONFIG_BACKLIGHT_MP3309_MC74)	+= mp3309_mc74.o

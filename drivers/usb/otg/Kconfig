@@ -146,6 +146,13 @@ config BCMPMU_OTG_XCEIV
        help
          Enable this to support Broadcom USB OTG transceiver
 
+config MC74_OTG_XCEIV
+       bool "Meraki MC74 device-only USB transceiver"
+       select USB_OTG_UTILS
+       select KONA_USB_CONTROL
+       help
+         Device-only transceiver for the MC74, which has no Broadcom PMU.
+
 config USB_BCM_OTG
        tristate "Broadcom USB OTG Driver"
        select USB_OTG

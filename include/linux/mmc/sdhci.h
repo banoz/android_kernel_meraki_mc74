@@ -23,6 +23,8 @@ struct sdhci_host {
 
 	unsigned int quirks;	/* Deviations from spec. */
 
+	int sdio_irq_clk_held;	/* MC74: clock kept on for SDIO card IRQ */
+
 /* Controller doesn't honor resets unless we touch the clock register */
 #define SDHCI_QUIRK_CLOCK_BEFORE_RESET			(1<<0)
 /* Controller has bad caps bits, but really supports DMA */

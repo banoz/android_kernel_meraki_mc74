@@ -484,7 +484,7 @@ static enum hrtimer_restart alarm_timer_triggered(struct hrtimer *timer)
 	return HRTIMER_NORESTART;
 }
 
-#if defined(CONFIG_ARCH_CAPRI) //In case of Broadcom Project.
+#if defined(CONFIG_ARCH_CAPRI) && defined(CONFIG_BCM_ALSA_SOUND) //In case of Broadcom Project.
 extern int AUDCTRL_InVoiceCall(void);
 #endif
 static void alarm_triggered_func(void *p)
@@ -493,7 +493,7 @@ static void alarm_triggered_func(void *p)
 	if (!(rtc->irq_data & RTC_AF))
 		return;
 	pr_alarm(INT, "rtc alarm triggered\n");
-	#if defined(CONFIG_ARCH_CAPRI) //In case of Broadcom Project.
+	#if defined(CONFIG_ARCH_CAPRI) && defined(CONFIG_BCM_ALSA_SOUND) //In case of Broadcom Project.
 
 	if (AUDCTRL_InVoiceCall()) 
 		wake_lock_timeout(&alarm_rtc_wake_lock_irq, 1 * HZ);

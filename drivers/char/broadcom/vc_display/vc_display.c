@@ -415,6 +415,11 @@ static int vc_display_set_power(struct lcd_device *ld, int power)
 		break;
 	}
 
+#ifdef CONFIG_MACH_CAPRI_ME1
+	/* MC74: never power the panel down (see vc_display_early_suspend) */
+	if (vc_power_level != DSPC_POWER_LEVEL_FULL)
+		return 0;
+#endif
 	state->requested_power_level = vc_power_level;
 	vc_display_power(state, vc_power_level);
 	return 0;
@@ -568,6 +573,15 @@ static void vc_display_early_suspend(struct early_suspend *s)
 {
 	LOG_DBG("Broadcom vc-display entered %s", __func__);
 
+#ifdef CONFIG_MACH_CAPRI_ME1
+	/*
+	 * MC74: the VideoCore can't power the panel back up (its MIPI bridge
+	 * is initialised by u-boot's "mipi init"; DSPC SET_POWER FULL returns
+	 * error 3 after an OFF), so screen-off only turns the backlight off
+	 * and the panel stays powered.
+	 */
+	return;
+#endif
 	/* Enter off state if we're not already in it. */
 	if (vcd_state_instance &&
 	    (vcd_state_instance->current_power_level > DSPC_POWER_LEVEL_OFF)) {

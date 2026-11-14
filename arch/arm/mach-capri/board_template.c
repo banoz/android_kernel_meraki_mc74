@@ -23,6 +23,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/serial_8250.h>
 #include <linux/i2c.h>
+#include <linux/i2c/cyttsp5_mc74.h>
 #include <linux/i2c-kona.h>
 #include <linux/debugfs.h>
 
@@ -360,7 +361,7 @@ static void gp2a_led_onoff(int onoff);
 
 #define OTG_CTRL_CORE_REG_SIZE     0x100
 
-#if defined(CONFIG_MACH_CAPRI_RAY) || defined(CONFIG_MACH_CAPRI_STONE) || defined(CONFIG_MACH_CAPRI_A01)
+#if defined(CONFIG_MACH_CAPRI_RAY) || defined(CONFIG_MACH_CAPRI_ME1) || defined(CONFIG_MACH_CAPRI_STONE) || defined(CONFIG_MACH_CAPRI_A01)
 #define TANGO_GPIO_RESET_PIN        0
 #define TANGO_GPIO_IRQ_PIN          1
 #define TANGO_I2C_BUS_ID            1
@@ -2192,7 +2193,7 @@ struct platform_device bcm_kp_device = {
 	.id = -1,
 };
 
-#if defined(CONFIG_MACH_CAPRI_RAY)
+#if defined(CONFIG_MACH_CAPRI_RAY) || defined(CONFIG_MACH_CAPRI_ME1)
 static struct bcm_keymap newKeymap[] = {
 	{BCM_KEY_ROW_0, BCM_KEY_COL_0, "Search Key", KEY_SEARCH},
 	{BCM_KEY_ROW_0, BCM_KEY_COL_1, "Menu-Key", KEY_MENU},
@@ -3307,6 +3308,30 @@ static void __init add_i2c_device(void)
 		platform_device_register(&i2c_adap_devices[i]);
 	}
 
+
+#if defined(CONFIG_TOUCHSCREEN_CYTTSP5_MC74) || defined(CONFIG_TOUCHSCREEN_CYTTSP5_MC74_MODULE)
+	{
+		/* MC74: Cypress/Parade CYTMA448 on i2c-0 @0x24, IRQ gpio 102, RST gpio 103 */
+		static struct cyttsp5_mc74_platform_data mc74_ts_pdata = {
+			.irq_gpio = 102,
+			.reset_gpio = 103,
+		};
+		static struct i2c_board_info mc74_ts_info[] = {
+			{ I2C_BOARD_INFO("cyttsp5", 0x24),
+			  .platform_data = &mc74_ts_pdata, },
+		};
+		i2c_register_board_info(0, mc74_ts_info, ARRAY_SIZE(mc74_ts_info));
+	}
+#endif
+#if defined(CONFIG_BACKLIGHT_MP3309_MC74)
+	{
+		/* MC74: MP3309 backlight on the "PMU" BSC (i2c-2), no Broadcom PMU there */
+		static struct i2c_board_info mc74_bl_info[] = {
+			{ I2C_BOARD_INFO("mp3309", 0x17), },
+		};
+		i2c_register_board_info(2, mc74_bl_info, ARRAY_SIZE(mc74_bl_info));
+	}
+#endif
 
 #if defined(CONFIG_TOUCHSCREEN_BCM915500) || defined(CONFIG_TOUCHSCREEN_BCM915500_MODULE)
 	printk(KERN_INFO "PPTEST %s() bcm915500_i2c_boardinfo[0].irq: %d\n",

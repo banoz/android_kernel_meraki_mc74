@@ -24,7 +24,7 @@
 #define ETHHW_PORT_1         1
 #define ETHHW_PORT_INT       8
 
-#define ETHHW_REG_BASE              KONA_ESW_VA
+#define ETHHW_REG_BASE              ((uint32_t)KONA_ESW_VA)
 
 #define ETHHW_REG8(x)               (*((volatile uint8_t *)(x)))
 #define ETHHW_REG16(x)              (*((volatile uint16_t *)(x)))
@@ -32,22 +32,22 @@
 #define ETHHW_REG48(x)              (*((volatile uint64_t *)(x)))
 #define ETHHW_REG64(x)              (*((volatile uint64_t *)(x)))
 
-extern void ethHw_get64(uint32_t addr, volatile uint64_t *datap);
-extern void ethHw_set64_byVal(uint32_t addr, volatile uint64_t data);
-extern void ethHw_set64_byRef(uint32_t addr, volatile uint64_t *datap);
+extern void ethHw_get64( uint32_t addr, volatile uint64_t *datap );
+extern void ethHw_set64_byVal( uint32_t addr, volatile uint64_t data );
+extern void ethHw_set64_byRef( uint32_t addr, volatile uint64_t *datap );
 
-static inline uint64_t eth_reg64_read(uint32_t addr)
+static inline uint64_t eth_reg64_read( uint32_t addr )
 {
-	volatile uint64_t value;
+   volatile uint64_t value;
 
-	ethHw_get64(addr, &value);
+   ethHw_get64( addr, &value );
 
-	return value;
+   return value;
 }
 
-static inline void eth_reg64_write(uint32_t addr, uint64_t value)
+static inline void eth_reg64_write( uint32_t addr, uint64_t value )
 {
-	ethHw_set64_byRef(addr, &value);
+   ethHw_set64_byRef(addr, &value);
 }
 
 /* A dummy read outside of the Ethernet block is required before any switch register read
@@ -78,6 +78,7 @@ static volatile uint32_t dummy;
                                                          val |= ((data) & (mask)); \
                                                          ETHHW_REG_SET( (reg), (val) ); \
                                                       }
+
 
 #define ethHw_reg_get64(addr, datap) do { \
                                            regDummyRead(); \
@@ -149,6 +150,7 @@ static volatile uint32_t dummy;
 #define ETHHW_REG_PAGE_IMP_CTRL              0x34
 #define ETHHW_REG_PAGE_MII_EXT(port)         (0x80+(port))
 
+
 /* Page 00h, Control Register */
 #define ethHw_regCtrlPortCtrl(port)                   ETHHW_REG8(ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_CTRL, (port)))
 #define ETHHW_REG_CTRL_PORTCTRL_STP_STATE_ENUM_OFFSET 1
@@ -179,11 +181,13 @@ static volatile uint32_t dummy;
 #define ETHHW_REG_STATUS_PORT_SPEED_1000MB            0x2
 #define ETHHW_REG_STATUS_PORT_SPEED_SHIFT(port)       (2*(port))
 
+
 /* Page 02h, Management Mode Register */
 #define ethHw_regMgmtGblMgmtCtrl                      ETHHW_REG8(ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_MGMT, 0x00))
 #define ETHHW_REG_MGMT_GBLMGMTCTRL_IMP_MODE_MASK      0xC0
 #define ETHHW_REG_MGMT_GBLMGMTCTRL_IMP_MODE_EN        0x80
 #define ETHHW_REG_MGMT_GBLMGMTCTRL_RX_BPDU_EN         0x02
+
 
 /* Page 05h, ARL Access Register */
 #define ethHw_regArlRwCtrl                            ETHHW_REG8(ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_ARL, 0x00))
@@ -191,10 +195,10 @@ static volatile uint32_t dummy;
 #define ETHHW_REG_ARL_RWCTRL_READ                     0x01
 #define ETHHW_REG_ARL_RWCTRL_WRITE                    0x00
 #define ETHHW_REG_ARL_MAC_INDEX                       ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_ARL, 0x02)
-#define ethHw_regArlMacIndex                          use_ethHw_get64_or_ethHw_set64_function	/*ETHHW_REG48(ETHHW_REG_ARL_MAC_INDEX) */
+#define ethHw_regArlMacIndex                          use_ethHw_get64_or_ethHw_set64_function /*ETHHW_REG48(ETHHW_REG_ARL_MAC_INDEX) */
 #define ethHw_regArlVlanIndex                         ETHHW_REG16(ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_ARL, 0x08))
 #define ETHHW_REG_ARL_MAC_VID_ENTRY(x)                ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_ARL, (0x10 + ((x)*0x10)))
-#define ethHw_regArlMacVidEntry(x)                    use_ethHw_get64_or_ethHw_set64_function	/*ETHHW_REG64(ETHHW_REG_ARL_MAC_VID_ENTRY((x))) */
+#define ethHw_regArlMacVidEntry(x)                    use_ethHw_get64_or_ethHw_set64_function /*ETHHW_REG64(ETHHW_REG_ARL_MAC_VID_ENTRY((x))) */
 #define ethHw_regArlFwdEntry(x)                       ETHHW_REG32(ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_ARL, (0x18 + ((x)*0x10))))
 #define ETHHW_REG_ARL_FWDENTRY_VALID                  0x00010000
 #define ETHHW_REG_ARL_FWDENTRY_STATIC                 0x00008000
@@ -203,7 +207,7 @@ static volatile uint32_t dummy;
 #define ethHw_regArlSearchCtrl                        ETHHW_REG8(ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_ARL, 0x50))
 #define ethHw_regArlSearchAddr                        ETHHW_REG16(ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_ARL, 0x51))
 #define ETHHW_REG_ARL_SEARCH_MAC_VID(x)               ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_ARL, (0x60 + ((x)*0x10)))
-#define ethHw_regArlSearchMacVid(x)                   use_ethHw_get64_or_ethHw_set64_function	/*ETHHW_REG64(ETHHW_REG_ARL_SEARCH_MAC_VID((x)) */
+#define ethHw_regArlSearchMacVid(x)                   use_ethHw_get64_or_ethHw_set64_function /*ETHHW_REG64(ETHHW_REG_ARL_SEARCH_MAC_VID((x)) */
 #define ethHw_regArlSearchResult(x)                   ETHHW_REG32(ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_ARL, (0x68 + ((x)*0x10))))
 
 /* #define ETHHW_REG_ARL_MAC_VID_ENTRY0                  ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_ARL, 0x10) */
@@ -230,6 +234,7 @@ static volatile uint32_t dummy;
 #define ETHHW_REG_MDIO_WRITE_MASK                     0x00000001
 
 #define ETHHW_REG_MII_TIMEOUT                         10000
+
 
 /* Use physical address when specifying MDIO address */
 #define ETHHW_REG_MII_EXT(port, offset)               ((ETHHW_REG_PAGE_MII_EXT((port)) << 8) | (uint8_t)(offset))
@@ -291,10 +296,13 @@ static volatile uint32_t dummy;
 #define ethHw_regMibIngressRateDropCount(port)        ETHHW_REG32(ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_MIB(port), 0xD0))
 #define ethHw_regMibEgressRateAssertCount(port)       ETHHW_REG32(ETHHW_REG_PAGEADDR(ETHHW_REG_PAGE_MIB(port), 0xD4))
 
+
 /* Switch interface register definitions */
 #define ethHw_regPtmConfig                               ETHHW_REG32(ETHHW_REG_BASE | 0x80008)
+#define ETHHW_REG_PTM_CONFIG_INITIAL_OFS_ENABLE       0x00000001
 #define ETHHW_REG_PTM_CONFIG_ENABLE                   0x90000000
 #define ETHHW_REG_PTM_CONFIG_BURST(burst)             ((burst) << 1)
+#define ETHHW_REG_PTM_CONFIG_OFFSET(ofs)              ((ofs) << 6)
 #define ETHHW_REG_PTM_CONFIG_BLOCK(block)             ((block) << 10)
 
 #define ethHw_regPtmDmaStatus                            ETHHW_REG32(ETHHW_REG_BASE | 0x80010)
@@ -325,6 +333,9 @@ static volatile uint32_t dummy;
 #define ETHHW_REG_IMP_SPEED_MASK                      0xf
 #define ETHHW_REG_IMP_SPEED_MASK_1000MBPS             0x4
 #define ETHHW_REG_IMP_SPEED_MASK_100MBPS              0x1
-#define ETHHW_REG_IMP_SPEED_MASK_10MBPS               0x3
+#define ETHHW_REG_IMP_SPEED_MASK_10MBPS               0x2
+
+#define ethHw_regImpRgmiiOverride                        ETHHW_REG32(ETHHW_REG_BASE | 0xa0098) // ESW_BUSIF_IMP_EXTERNAL_PORT_RGMII_OVERRIDE_OFFSET
+#define esw_rgmii_mii_mode_sel                           ETHHW_REG32(ETHHW_REG_BASE | 0xa00E8) // ESW_BUSIF_IMP_ESW_RGMII_MII_MODE_SEL_OFFSET
 
 #endif /* _ETHHW_REG_H */

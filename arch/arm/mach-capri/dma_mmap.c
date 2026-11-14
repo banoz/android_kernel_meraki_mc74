@@ -1620,8 +1620,9 @@ void dma_mmap_free_pagelist(DMA_MMAP_PAGELIST_T * pagelist)
 {
 	int i;
 	for (i = 0; i < pagelist->numLockedPages; i++) {
-		if (pagelist->dir != DMA_FROM_DEVICE)
-			set_page_dirty(pagelist->pages[i]);
+		/* the device wrote these pages (bulk receive): mark them dirty */
+		if (pagelist->dir != DMA_TO_DEVICE)
+			set_page_dirty_lock(pagelist->pages[i]);
 		page_cache_release(pagelist->pages[i]);
 	}
 

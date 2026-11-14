@@ -48,7 +48,8 @@
 
 #define ETHHW_BRCM_HDR_LEN       sizeof(uint32_t)
 
-typedef enum {
+typedef enum
+{
 	ETHHW_STP_STATE_NONE = 0,
 	ETHHW_STP_STATE_DISABLED,
 	ETHHW_STP_STATE_BLOCKING,
@@ -57,7 +58,8 @@ typedef enum {
 	ETHHW_STP_STATE_FORWARDING,
 } ETHHW_STP_STATE;
 
-typedef enum {
+typedef enum
+{
 	ETHHW_TC_0 = 0,
 	ETHHW_TC_1 = 1,
 	ETHHW_TC_2 = 2,
@@ -72,7 +74,8 @@ typedef enum {
 #define ETHHW_TC_HIGHEST         ETHHW_TC_7
 #define ETHHW_TC_MASK            0x7
 
-typedef enum {
+typedef enum
+{
 	ETHHW_TE_FOLLOW = 0,
 	ETHHW_TE_UNTAG = 1,
 	ETHHW_TE_KEEP = 2,
@@ -81,8 +84,8 @@ typedef enum {
 
 #define ETHHW_TE_MASK            0x3
 
-#define ETHHW_MII_FLAGS_EXT      0x80000000	/* External PHY */
-#define ETHHW_MII_FLAGS_SERDES   0x40000000	/* SERDES PHY */
+#define ETHHW_MII_FLAGS_EXT      0x80000000     /* External PHY */
+#define ETHHW_MII_FLAGS_SERDES   0x40000000     /* SERDES PHY */
 typedef uint32_t ETHHW_MII_FLAGS;
 
 /* Note that this assumes the buffers are 16-bit aligned */
@@ -110,12 +113,12 @@ typedef uint32_t ETHHW_MII_FLAGS;
 
 /* Define result codes to maintain backward compatibility */
 typedef enum {
-	ETHHW_RC_NONE = 0,
-	ETHHW_RC_PARAM = -4,
-	ETHHW_RC_FULL = -6,
-	ETHHW_RC_TIMEOUT = -9,
-	ETHHW_RC_UNAVAIL = -16,
-	ETHHW_RC_PORT = -18
+	ETHHW_RC_NONE       = 0,
+	ETHHW_RC_PARAM      = -4,
+	ETHHW_RC_FULL       = -6,
+	ETHHW_RC_TIMEOUT    = -9,
+	ETHHW_RC_UNAVAIL    = -16,
+	ETHHW_RC_PORT       = -18
 } ETHHW_RC;
 
 #define ETHHW_RC_SUCCESS(rc)        ((rc) >= 0)
@@ -150,108 +153,105 @@ typedef enum {
 
 #define ethHw_brcmTagGetPort(tagp)     ((tagp)[3] & 0x1)
 
-int ethHw_Init(void);
-int ethHw_Exit(void);
+int ethHw_Init( void );
+int ethHw_Exit( void );
 
-int ethHw_stpStateSet(int port, ETHHW_STP_STATE state);
-int ethHw_stpStateGet(int port, ETHHW_STP_STATE * statep);
+int ethHw_stpStateSet( int port, ETHHW_STP_STATE state );
+int ethHw_stpStateGet( int port, ETHHW_STP_STATE *statep );
 
-int ethHw_impEnableSet(int enable);
-int ethHw_impEnableGet(int *enablep);
-int ethHw_impSpeedSet(int mbpsRx, int mbpsTx);
-int ethHw_impSpeedGet(int *mbpsRxp, int *mbpsTxp);
+int ethHw_impEnableSet( int enable );
+int ethHw_impEnableGet( int *enablep );
+int ethHw_impSpeedSet( int mbpsRx, int mbpsTx );
+int ethHw_impSpeedGet( int *mbpsRxp, int *mbpsTxp );
 
-int ethHw_arlEntrySet(char *macp, int vid, int port, int cos,
-		      int entryValid, int entryStatic);
+int ethHw_arlEntrySet( char *macp, int vid, int port, int cos,
+                       int entryValid, int entryStatic );
 
-int ethHw_miiSet(int port, ETHHW_MII_FLAGS flags, uint32_t addr, uint32_t data);
-int ethHw_miiGet(int port, ETHHW_MII_FLAGS flags, uint32_t addr,
-		 uint32_t *datap);
+int ethHw_miiSet( int port, ETHHW_MII_FLAGS flags, uint32_t addr, uint32_t data );
+int ethHw_miiGet( int port, ETHHW_MII_FLAGS flags, uint32_t addr, uint32_t *datap );
 
-int ethHw_portLinkStatus(int port);
-int ethHw_portSpeed(int port);
-int ethHw_portLinkStatusChange(int port);
+int ethHw_portLinkStatus( int port );
+int ethHw_portSpeed( int port );
+int ethHw_portLinkStatusChange( int port );
 
-int ethHw_phyPowerdownSet(int port, int enable);
-int ethHw_phyPowerdownGet(int port, int *enablep);
+int ethHw_phyPowerdownSet( int port, int enable );
+int ethHw_phyPowerdownGet( int port, int *enablep );
 
-int ethHw_macEnableSet(int port, int tx, int rx);
-int ethHw_macEnableGet(int port, int *txp, int *rxp);
+int ethHw_macEnableSet( int port, int tx, int rx );
+int ethHw_macEnableGet( int port, int *txp, int *rxp );
 
-int ethHw_Loopback(int port, int enable);
+int ethHw_Loopback( int port, int enable );
 
-uint64_t ethHw_mibTxOctets(int port);
-uint32_t ethHw_mibTxDropPkts(int port);
-uint32_t ethHw_mibTxQ0Pkt(int port);
-uint32_t ethHw_mibTxBroadcastPkts(int port);
-uint32_t ethHw_mibTxMulticastPkts(int port);
-uint32_t ethHw_mibTxUnicastPkts(int port);
-uint32_t ethHw_mibTxCollisions(int port);
-uint32_t ethHw_mibTxSingleCollision(int port);
-uint32_t ethHw_mibTxMultipleCollision(int port);
-uint32_t ethHw_mibTxDeferredTransmit(int port);
-uint32_t ethHw_mibTxLateCollision(int port);
-uint32_t ethHw_mibTxExcessiveCollision(int port);
-uint32_t ethHw_mibTxFrameInDisc(int port);
-uint32_t ethHw_mibTxPausePkts(int port);
-uint32_t ethHw_mibTxQ1Pkt(int port);
-uint32_t ethHw_mibTxQ2Pkt(int port);
-uint32_t ethHw_mibTxQ3Pkt(int port);
-uint32_t ethHw_mibTxQ4Pkt(int port);
-uint32_t ethHw_mibTxQ5Pkt(int port);
-uint64_t ethHw_mibRxOctets(int port);
-uint32_t ethHw_mibRxUndersizePkts(int port);
-uint32_t ethHw_mibRxPausePkts(int port);
-uint32_t ethHw_mibPkts64Octets(int port);
-uint32_t ethHw_mibPkts65To127Octets(int port);
-uint32_t ethHw_mibPkts128To255Octets(int port);
-uint32_t ethHw_mibPkts256To511Octets(int port);
-uint32_t ethHw_mibPkts512To1023Octets(int port);
-uint32_t ethHw_mibPkts1024ToMaxPktOctets(int port);
-uint32_t ethHw_mibRxOversizePkts(int port);
-uint32_t ethHw_mibRxJabbers(int port);
-uint32_t ethHw_mibRxAlignmentErrors(int port);
-uint32_t ethHw_mibRxFcsErrors(int port);
-uint64_t ethHw_mibRxGoodOctets(int port);
-uint32_t ethHw_mibRxDropPkts(int port);
-uint32_t ethHw_mibRxUnicastPkts(int port);
-uint32_t ethHw_mibRxMulticastPkts(int port);
-uint32_t ethHw_mibRxBroadcastPkts(int port);
-uint32_t ethHw_mibRxSaChanges(int port);
-uint32_t ethHw_mibRxFragments(int port);
-uint32_t ethHw_mibJumboPktCount(int port);
-uint32_t ethHw_mibRxSymbolError(int port);
-uint32_t ethHw_mibInRangeErrorCount(int port);
-uint32_t ethHw_mibOutRangeErrorCount(int port);
-uint32_t ethHw_mibRxDiscard(int port);
-uint32_t ethHw_mibDosAssertCount(int port);
-uint32_t ethHw_mibDosDropCount(int port);
-uint32_t ethHw_mibIngressRateAssertCount(int port);
-uint32_t ethHw_mibIngressRateDropCount(int port);
-uint32_t ethHw_mibEgressRateAssertCount(int port);
+uint64_t ethHw_mibTxOctets( int port );
+uint32_t ethHw_mibTxDropPkts( int port );
+uint32_t ethHw_mibTxQ0Pkt( int port );
+uint32_t ethHw_mibTxBroadcastPkts( int port );
+uint32_t ethHw_mibTxMulticastPkts( int port );
+uint32_t ethHw_mibTxUnicastPkts( int port );
+uint32_t ethHw_mibTxCollisions( int port );
+uint32_t ethHw_mibTxSingleCollision( int port );
+uint32_t ethHw_mibTxMultipleCollision( int port );
+uint32_t ethHw_mibTxDeferredTransmit( int port );
+uint32_t ethHw_mibTxLateCollision( int port );
+uint32_t ethHw_mibTxExcessiveCollision( int port );
+uint32_t ethHw_mibTxFrameInDisc( int port );
+uint32_t ethHw_mibTxPausePkts( int port );
+uint32_t ethHw_mibTxQ1Pkt( int port );
+uint32_t ethHw_mibTxQ2Pkt( int port );
+uint32_t ethHw_mibTxQ3Pkt( int port );
+uint32_t ethHw_mibTxQ4Pkt( int port );
+uint32_t ethHw_mibTxQ5Pkt( int port );
+uint64_t ethHw_mibRxOctets( int port );
+uint32_t ethHw_mibRxUndersizePkts( int port );
+uint32_t ethHw_mibRxPausePkts( int port );
+uint32_t ethHw_mibPkts64Octets( int port );
+uint32_t ethHw_mibPkts65To127Octets( int port );
+uint32_t ethHw_mibPkts128To255Octets( int port );
+uint32_t ethHw_mibPkts256To511Octets( int port );
+uint32_t ethHw_mibPkts512To1023Octets( int port );
+uint32_t ethHw_mibPkts1024ToMaxPktOctets( int port );
+uint32_t ethHw_mibRxOversizePkts( int port );
+uint32_t ethHw_mibRxJabbers( int port );
+uint32_t ethHw_mibRxAlignmentErrors( int port );
+uint32_t ethHw_mibRxFcsErrors( int port );
+uint64_t ethHw_mibRxGoodOctets( int port );
+uint32_t ethHw_mibRxDropPkts( int port );
+uint32_t ethHw_mibRxUnicastPkts( int port );
+uint32_t ethHw_mibRxMulticastPkts( int port );
+uint32_t ethHw_mibRxBroadcastPkts( int port );
+uint32_t ethHw_mibRxSaChanges( int port );
+uint32_t ethHw_mibRxFragments( int port );
+uint32_t ethHw_mibJumboPktCount( int port );
+uint32_t ethHw_mibRxSymbolError( int port );
+uint32_t ethHw_mibInRangeErrorCount( int port );
+uint32_t ethHw_mibOutRangeErrorCount( int port );
+uint32_t ethHw_mibRxDiscard( int port );
+uint32_t ethHw_mibDosAssertCount( int port );
+uint32_t ethHw_mibDosDropCount( int port );
+uint32_t ethHw_mibIngressRateAssertCount( int port );
+uint32_t ethHw_mibIngressRateDropCount( int port );
+uint32_t ethHw_mibEgressRateAssertCount( int port );
 
 static inline int ethHw_rxFrameFormat(char **bufpp, int *lenp)
 {
 	char *srcp;
 	char *dstp;
-	uint8_t *tagp;
 	register int i;
 
 	/*
 	 *  *bufp in:
-	 *     byte  0  5 6 11 12      15 16  19
+	 *     byte  0  5 6 11 12      15 16  17
 	 *           [DA] [SA] [BRCM_HDR] [TYPE]
 	 *
 	 *  *bufp out (Broadcom header removed):
-	 *     byte  0  5 6 11 12  15
-	 *           [DA] [SA] [TYPE]
+	 *     byte  	       4  9 10 15 16  17 18
+	 *           	       [DA]  [SA] [TYPE] [payload]
 	 *
 	 *  Broadcom header contains source port information
 	 */
 
 	srcp = *bufpp + 11;
 	dstp = srcp + ETHHW_BRCM_HDR_LEN;
-	tagp = (uint8_t *)(*bufpp + 12);
 
 	/* Update length to remove Broadcom header and ethernet FCS */
 	*lenp -= (ETHHW_BRCM_HDR_LEN + sizeof(uint32_t));
@@ -277,7 +277,7 @@ static inline int ethHw_rxFrameFormatRaw(char **bufpp, int *lenp)
 	 *     byte  0  5 6 11 12      15 16  19
 	 *           [DA] [SA] [BRCM_HDR] [TYPE]
 	 *
-	 *  *bufp out (Broadcom header removed):
+	 *  *bufp out (include Broadcom header):
 	 *     byte  0  5 6 11 12      15 16  19
 	 *           [DA] [SA] [RAW_HDR] [TYPE]
 	 *
@@ -305,8 +305,9 @@ static inline int ethHw_rxFrameFormatRaw(char **bufpp, int *lenp)
 	return 0;
 }
 
+
 static inline int ethHw_txFrameFormat(char **bufpp, int *lenp, int portMask,
-				      ETHHW_TC tc, ETHHW_TE te)
+		ETHHW_TC tc, ETHHW_TE te )
 {
 	char *bufp;
 	char *srcp;
@@ -325,8 +326,7 @@ static inline int ethHw_txFrameFormat(char **bufpp, int *lenp, int portMask,
 
 	bufp = *bufpp;
 
-	if ((bufp[12] == ETHHW_BRCM_TYPE_MSB)
-	    && (bufp[13] == ETHHW_BRCM_TYPE_LSB)) {
+	if ((bufp[12] == ETHHW_BRCM_TYPE_MSB) && (bufp[13] == ETHHW_BRCM_TYPE_LSB)) {
 		/*
 		 *  *bufp in:
 		 *     byte  0  5 6 11 12     15 16  19
@@ -350,18 +350,18 @@ static inline int ethHw_txFrameFormat(char **bufpp, int *lenp, int portMask,
 		 *  then encoded since the bit positions are aligned and only require a
 		 *  byte shift)
 		 */
-		ethHw_brcmTagInitRaw(tagp);
+		ethHw_brcmTagInitRaw( tagp );
 #else
 		tc = (int)((tagp[2] >> 2) & ETHHW_TC_MASK);
 		te = (int)(tagp[2] & ETHHW_TE_MASK);
-		ethHw_brcmTagInit(tagp, tc, te);
+		ethHw_brcmTagInit( tagp, tc, te );
 #endif
-		if (portMask == 0) {
+		if (portMask == 0 ) {
 			/* User only wants to specify the tc and te and let the ARL determine
 			 *  the port forwarding
 			 */
 		} else {
-			ethHw_brcmTagSetPortMask(tagp, portMask);
+			ethHw_brcmTagSetPortMask( tagp, portMask );
 		}
 
 		/* Update length to include FCS */
@@ -386,9 +386,9 @@ static inline int ethHw_txFrameFormat(char **bufpp, int *lenp, int portMask,
 		tagp = (uint8_t *)dstp;
 
 		/* Set Broadcom tag */
-		ethHw_brcmTagInit(tagp, tc, te);
+		ethHw_brcmTagInit( tagp, tc, te );
 		if (portMask >= 0) {
-			ethHw_brcmTagSetPortMask(tagp, portMask);
+			ethHw_brcmTagSetPortMask( tagp, portMask );
 		}
 
 		/* Update length to include Broadcom header and FCS */

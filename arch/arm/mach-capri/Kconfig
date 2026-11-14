@@ -25,6 +25,16 @@ config MACH_CAPRI_RAY
 	help
 	  Support for the Broadcom Capri RAY board.
 
+config MACH_CAPRI_ME1
+	bool "Support Cisco Meraki MC74 (CAPRI_ME1) board"
+	help
+	  Support for the Meraki MC74 phone (BCM28155, based on the RAY board).
+
+config MC74_DMA_COHERENT_SO
+	bool "MC74: map DMA-coherent memory strongly ordered"
+	depends on MACH_CAPRI_ME1
+	default n
+
 config MACH_CAPRI_TABLET
 	bool "Support Broadcom Capri Tablet (BRT) board"
 	help

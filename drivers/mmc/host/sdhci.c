@@ -1648,6 +1648,22 @@ static void sdhci_enable_sdio_irq(struct mmc_host *mmc, int enable)
 		sdhci_disable_irq_wakeups(host);
 		sdhci_mask_irqs(host, SDHCI_INT_CARD_INT);
 	}
+
+	/*
+	 * The card interrupt is only seen while the host is clocked: keep an
+	 * extra clock reference for as long as the SDIO IRQ is enabled
+	 * (brcmfmac uses in-band interrupts; with the clock gated between
+	 * requests its control responses get lost).
+	 */
+	if (host->ops->clk_enable && enable != host->sdio_irq_clk_held) {
+		if (enable)
+			ret = host->ops->clk_enable(host, 1);
+		else
+			ret = host->ops->clk_enable(host, 0);
+		if (!ret)
+			host->sdio_irq_clk_held = enable;
+		ret = 0;
+	}
 out:
 	mmiowb();
 

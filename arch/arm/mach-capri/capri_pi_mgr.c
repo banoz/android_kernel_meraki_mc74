@@ -392,13 +392,12 @@ static struct pi sub_sys_pi = {
 
 #ifdef CONFIG_MACH_CAPRI_ESUB_ENABLE
 /*ESUB PI Id*/
-static char *esub_ccu[] = { ESUB_CCU_CLK_NAME_STR };
-
+static char *esub_ccu[] = {ESUB_CCU_CLK_NAME_STR};
 struct pi_opp esub_opp = {
-	.opp = {
-		[PI_OPP_ECONOMY] = ESUB_CCU_FREQ_ID_ECO,
-		[PI_OPP_NORMAL] = ESUB_CCU_FREQ_ID_NRML,
-		},
+	.opp =  {
+			[PI_OPP_ECONOMY] = ESUB_CCU_FREQ_ID_ECO,
+			[PI_OPP_NORMAL] = ESUB_CCU_FREQ_ID_NRML,
+	},
 };
 
 static struct pi_state esub_states[] = {
@@ -406,6 +405,7 @@ static struct pi_state esub_states[] = {
 	PI_STATE(PI_STATE_RETENTION, RETN_POLICY, 100, 0),
 };
 
+static u32 esub_dep_pi[] = { PI_MGR_PI_ID_ESUB_SUB };
 static struct pi esub_pi = {
 	.name = "esub",
 	.id = PI_MGR_PI_ID_ESUB,
@@ -415,42 +415,34 @@ static struct pi esub_pi = {
 	.pi_state = esub_states,
 	.num_states = ARRAY_SIZE(esub_states),
 	.opp_active = 0,
-	/*opp frequnecies ...need to revisit */
-	.pi_opp = &esub_opp,
+	/*opp frequnecies ...need to revisit*/
+	.pi_opp =  &esub_opp,
 	.num_opp = 2,
 	.qos_sw_event_id = SOFTWARE_0_EVENT,
-	.dep_pi = PI_MGR_PI_ID_ESUB_SUB,
-	.num_dep_pi = 1,
+	.dep_pi = esub_dep_pi,
+	.num_dep_pi = ARRAY_SIZE(esub_dep_pi),
 	.pi_info = {
-		    .policy_reg_offset = PWRMGR_LCDTE_VI_MM_POLICY_OFFSET,
-		    .ac_shift =
-		    PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_PM_AC_SHIFT,
-		    .atl_shift =
-		    PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_PM_ATL_SHIFT,
-		    .pm_policy_shift =
-		    PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_PM_POLICY_SHIFT,
+				.policy_reg_offset = PWRMGR_LCDTE_VI_MM_POLICY_OFFSET,
+				.ac_shift = PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_PM_AC_SHIFT,
+				.atl_shift = PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_PM_ATL_SHIFT,
+				.pm_policy_shift = PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_PM_POLICY_SHIFT,
 
-		    .fixed_vol_map_mask =
-		    PWRMGR_FIXED_VOLTAGE_MAP_VI_ESUB_FIXED_VOLTAGE_MAP_SHIFT,
-		    .vi_to_vOx_map_mask =
-		    PWRMGR_VI_TO_VO0_MAP_VI_ESUB_TO_VO0_MAP_MASK,
-		    .wakeup_overide_mask =
-		    PWRMGR_PI_DEFAULT_POWER_STATE_PI_ESUB_WAKEUP_OVERRIDE_MASK,
-		    .counter_reg_offset = PWRMGR_PI_ESUB_ON_COUNTER_OFFSET,
-		    .rtn_clmp_dis_mask =
-		    PWRMGR_PI_DEFAULT_POWER_STATE_PI_ESUB_RETENTION_CLAMP_DISABLE_MASK,
-		    },
+				.fixed_vol_map_mask = PWRMGR_FIXED_VOLTAGE_MAP_VI_ESUB_FIXED_VOLTAGE_MAP_SHIFT,
+				.vi_to_vOx_map_mask = PWRMGR_VI_TO_VO0_MAP_VI_ESUB_TO_VO0_MAP_MASK,
+				.wakeup_overide_mask = PWRMGR_PI_DEFAULT_POWER_STATE_PI_ESUB_WAKEUP_OVERRIDE_MASK,
+				.counter_reg_offset = PWRMGR_PI_ESUB_ON_COUNTER_OFFSET,
+				.rtn_clmp_dis_mask = PWRMGR_PI_DEFAULT_POWER_STATE_PI_ESUB_RETENTION_CLAMP_DISABLE_MASK,
+			},
 	.ops = &gen_pi_ops,
 };
 
 /*ESUB_SUB PI Id*/
-static char *esub_sub_ccu[] = { ESUB_CCU_CLK_NAME_STR };
-
+static char *esub_sub_ccu[] = {ESUB_CCU_CLK_NAME_STR};
 struct pi_opp esub_sub_opp = {
-	.opp = {
-		[PI_OPP_ECONOMY] = ESUB_CCU_FREQ_ID_ECO,
-		[PI_OPP_NORMAL] = ESUB_CCU_FREQ_ID_NRML,
-		},
+	.opp =  {
+			[PI_OPP_ECONOMY] = ESUB_CCU_FREQ_ID_ECO,
+			[PI_OPP_NORMAL] = ESUB_CCU_FREQ_ID_NRML,
+	},
 };
 
 static struct pi_state esub_sub_states[] = {
@@ -467,29 +459,22 @@ static struct pi esub_sub_pi = {
 	.pi_state = esub_sub_states,
 	.num_states = ARRAY_SIZE(esub_sub_states),
 	.opp_active = 0,
-	/*opp frequnecies ...need to revisit */
-	.pi_opp = &esub_sub_opp,
+	/*opp frequnecies ...need to revisit*/
+	.pi_opp =  &esub_sub_opp,
 	.num_opp = 2,
 	.qos_sw_event_id = SOFTWARE_0_EVENT,
 	.pi_info = {
-		    .policy_reg_offset = PWRMGR_LCDTE_VI_MM_POLICY_OFFSET,
-		    .ac_shift =
-		    PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_SUB_PM_AC_SHIFT,
-		    .atl_shift =
-		    PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_SUB_PM_ATL_SHIFT,
-		    .pm_policy_shift =
-		    PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_SUB_PM_POLICY_SHIFT,
+				.policy_reg_offset = PWRMGR_LCDTE_VI_MM_POLICY_OFFSET,
+				.ac_shift = PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_SUB_PM_AC_SHIFT,
+				.atl_shift = PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_SUB_PM_ATL_SHIFT,
+				.pm_policy_shift = PWRMGR_LCDTE_VI_MM_POLICY_LCDTE_PI_ESUB_SUB_PM_POLICY_SHIFT,
 
-		    .fixed_vol_map_mask =
-		    PWRMGR_FIXED_VOLTAGE_MAP_VI_ESUB_FIXED_VOLTAGE_MAP_SHIFT,
-		    .vi_to_vOx_map_mask =
-		    PWRMGR_VI_TO_VO0_MAP_VI_ESUB_TO_VO0_MAP_MASK,
-		    .wakeup_overide_mask =
-		    PWRMGR_PI_DEFAULT_POWER_STATE_PI_ESUB_SUB_WAKEUP_OVERRIDE_MASK,
-		    .counter_reg_offset = PWRMGR_PI_ESUB_SUB_ON_COUNTER_OFFSET,
-		    .rtn_clmp_dis_mask =
-		    PWRMGR_PI_DEFAULT_POWER_STATE_PI_ESUB_SUB_RETENTION_CLAMP_DISABLE_MASK,
-		    },
+				.fixed_vol_map_mask = PWRMGR_FIXED_VOLTAGE_MAP_VI_ESUB_FIXED_VOLTAGE_MAP_SHIFT,
+				.vi_to_vOx_map_mask = PWRMGR_VI_TO_VO0_MAP_VI_ESUB_TO_VO0_MAP_MASK,
+				.wakeup_overide_mask = PWRMGR_PI_DEFAULT_POWER_STATE_PI_ESUB_SUB_WAKEUP_OVERRIDE_MASK,
+				.counter_reg_offset = PWRMGR_PI_ESUB_SUB_ON_COUNTER_OFFSET,
+				.rtn_clmp_dis_mask = PWRMGR_PI_DEFAULT_POWER_STATE_PI_ESUB_SUB_RETENTION_CLAMP_DISABLE_MASK,
+			},
 	.ops = &gen_pi_ops,
 };
 #endif

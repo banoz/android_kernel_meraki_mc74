@@ -3300,6 +3300,30 @@ int serial8250_register_port(struct uart_port *port)
         if (IS_ERR(uart->clk))
             return PTR_ERR(uart->clk);
 
+#ifdef CONFIG_MACH_CAPRI_ME1
+	/*
+	 * MC74: don't re-clock the console UART; clk_set_rate() changes the
+	 * clock under the live console. Keep the bootloader clock and derive
+	 * the input clock from the programmed 115200 divisor. The other ports
+	 * (Bluetooth on UARTB3 needs 48 MHz for 3 Mbaud) are clocked normally.
+	 */
+	if (port->mapbase != KONA_UART_LLDEBUG_PA) {
+		clk_set_rate(uart->clk, port->uartclk);
+		port->uartclk = clk_get_rate(uart->clk);
+	} else {
+		unsigned int lcr, div;
+
+		lcr = readl(port->membase + (UART_LCR << port->regshift));
+		writel(lcr | UART_LCR_DLAB, port->membase + (UART_LCR << port->regshift));
+		div = (readl(port->membase + (UART_DLL << port->regshift)) & 0xff) |
+		      ((readl(port->membase + (UART_DLM << port->regshift)) & 0xff) << 8);
+		writel(lcr, port->membase + (UART_LCR << port->regshift));
+		if (div)
+			port->uartclk = div * 16 * 115200;
+		else
+			port->uartclk = clk_get_rate(uart->clk);
+	}
+#else
 #if defined(CONFIG_DEBUG_LL) && defined(CONFIG_EARLY_PRINTK)
 	/* Don't set the speed on the UART used for early prints */
 	if (port->mapbase != KONA_UART_LLDEBUG_PA)
@@ -3308,6 +3332,7 @@ int serial8250_register_port(struct uart_port *port)
 	clk_set_rate(uart->clk, port->uartclk);
 #endif
 	port->uartclk = clk_get_rate(uart->clk);
+#endif
 #endif
 		uart->port.iobase       = port->iobase;
 		uart->port.membase      = port->membase;

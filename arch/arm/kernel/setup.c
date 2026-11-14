@@ -816,6 +816,20 @@ static struct machine_desc * __init setup_machine_tags(unsigned int nr)
 		dump_machine_table(); /* does not return */
 	}
 
+#ifdef CONFIG_MMU
+	/*
+	 * MC74: u-boot's bootm passes ATAGs at 0x90000100, outside the
+	 * kernel's RAM (PHYS_OFFSET 0xA0000000) and the boot MMU mapping.
+	 * Dereferencing it hangs silently, so ignore it and fall back to
+	 * the built-in command line, as for the machine default below.
+	 */
+	if (__atags_pointer && (__atags_pointer < PHYS_OFFSET ||
+				__atags_pointer >= PHYS_OFFSET + SZ_1M)) {
+		printk(KERN_WARNING "ATAGs at physical 0x%08x out of reach, ignoring\n",
+		       __atags_pointer);
+		__atags_pointer = 0;
+	}
+#endif
 	if (__atags_pointer)
 		tags = phys_to_virt(__atags_pointer);
 	else if (mdesc->boot_params) {
@@ -867,6 +881,23 @@ static struct machine_desc * __init setup_machine_tags(unsigned int nr)
 		save_atags(tags);
 		parse_tags(tags);
 	}
+
+#ifdef CONFIG_KONA_ATAG_DT_BUILTIN_MC74
+	/*
+	 * MC74: bootm's ATAGs (incl. the dt-blob tag) are out of reach, so
+	 * fall back to the MC74 dt-blob built into the kernel.
+	 */
+	{
+		extern int kona_dtblob_seen;
+		extern const struct tag mc74_builtin_dtblob_tag;
+		extern int __init kona_parse_tag_dt(const struct tag *tag);
+
+		if (!kona_dtblob_seen) {
+			printk(KERN_INFO "Using built-in MC74 dt-blob\n");
+			kona_parse_tag_dt(&mc74_builtin_dtblob_tag);
+		}
+	}
+#endif
 
 	/* parse_early_param needs a boot_command_line */
 	strlcpy(boot_command_line, from, COMMAND_LINE_SIZE);

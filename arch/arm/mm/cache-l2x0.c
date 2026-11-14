@@ -30,6 +30,19 @@
 #define CACHE_LINE_SIZE		32
 
 #ifdef CONFIG_ARCH_CAPRI
+/*
+ * The PL310 on Capri A2 *and A3* (the MC74 is A3) sees DRAM at a different
+ * physical address than the CPU, so maintenance by PA must be remapped.
+ * Without it every outer cache operation misses and DMA is incoherent.
+ * "l2_pa_remap" on the cmdline forces it for other revisions.
+ */
+static int l2_pa_remap;
+static int __init l2_pa_remap_setup(char *s)
+{
+	l2_pa_remap = 1;
+	return 1;
+}
+__setup("l2_pa_remap", l2_pa_remap_setup);
 #define L2_PHYS_ADDR(addr)    (((addr) >= 0x40000000) && ((addr) < 0xC0000000)) ? \
 				((addr) + 0x40000000) : ((addr) - 0x80000000)
 static unsigned int chip_version;
@@ -84,7 +97,7 @@ static inline void l2x0_clean_line(unsigned long addr)
 	void __iomem *base = l2x0_base;
 
 #ifdef CONFIG_ARCH_CAPRI
-	if (chip_version == CAPRI_A2)
+	if (chip_version >= CAPRI_A2 || l2_pa_remap)
 		addr = L2_PHYS_ADDR(addr);
 #endif
 	cache_wait(base + L2X0_CLEAN_LINE_PA, 1);
@@ -96,7 +109,7 @@ static inline void l2x0_inv_line(unsigned long addr)
 	void __iomem *base = l2x0_base;
 
 #ifdef CONFIG_ARCH_CAPRI
-	if (chip_version == CAPRI_A2)
+	if (chip_version >= CAPRI_A2 || l2_pa_remap)
 		addr = L2_PHYS_ADDR(addr);
 #endif
 	cache_wait(base + L2X0_INV_LINE_PA, 1);
@@ -126,7 +139,7 @@ static inline void l2x0_flush_line(unsigned long addr)
 	void __iomem *base = l2x0_base;
 
 #ifdef CONFIG_ARCH_CAPRI
-	if (chip_version == CAPRI_A2)
+	if (chip_version >= CAPRI_A2 || l2_pa_remap)
 		addr = L2_PHYS_ADDR(addr);
 #endif
 
@@ -143,7 +156,7 @@ static inline void l2x0_flush_line(unsigned long addr)
 	void __iomem *base = l2x0_base;
 
 #ifdef CONFIG_ARCH_CAPRI
-	if (chip_version == CAPRI_A2)
+	if (chip_version >= CAPRI_A2 || l2_pa_remap)
 		addr = L2_PHYS_ADDR(addr);
 #endif
 	cache_wait(base + L2X0_CLEAN_INV_LINE_PA, 1);
@@ -475,6 +488,8 @@ void __init l2x0_init(void __iomem *base, __u32 aux_val, __u32 aux_mask)
 
 #ifdef CONFIG_ARCH_CAPRI
 	chip_version = get_chip_version();
+	printk(KERN_INFO "l2x0: chip version 0x%02x%s\n", chip_version,
+	       l2_pa_remap ? ", PA remap forced" : "");
 #endif
 
 	printk(KERN_INFO "%s cache controller enabled\n", type);

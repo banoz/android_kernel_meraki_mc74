@@ -218,6 +218,14 @@ config KONA_ATAG_DT_DTS_FILE
        help
          DeviceTree source file name
 
+config KONA_ATAG_DT_BUILTIN_MC74
+       bool "Built-in MC74 dt-blob fallback"
+       depends on KONA_ATAG_DT && MACH_CAPRI_ME1
+       default y
+       help
+         Use a dt-blob built into the kernel when the bootloader's
+         ATAGs are out of reach (u-boot bootm on the MC74).
+
 config PROC_PINMUX_DUMP
        bool "Enable Pin-mux Dump"
        help

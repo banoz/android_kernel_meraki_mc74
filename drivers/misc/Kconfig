@@ -838,4 +838,14 @@ source "drivers/misc/vc04_services/Kconfig"
 source "drivers/misc/emmc_rpmb/Kconfig"
 source "drivers/misc/modem_if/Kconfig"
 
+config MC74_DMATEST
+	bool "MC74 DMA coherency self-test (ESUB DMA, channel 2)"
+	depends on MACH_CAPRI_ME1
+
+config MC74_CAPH
+	bool "Cisco Meraki MC74 speaker/mic (Kona CAPH/AudioH ALSA card)"
+	depends on ARCH_CAPRI && SND_PCM
+	help
+	  Plain ALSA card for the MC74 handsfree speaker and analog mic.
+
 endif # MISC_DEVICES

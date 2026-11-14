@@ -233,7 +233,19 @@ extern pgprot_t		pgprot_kernel;
 #define pgprot_writecombine(prot) \
 	__pgprot_modify(prot, L_PTE_MT_MASK, L_PTE_MT_BUFFERABLE)
 
-#ifdef CONFIG_ARM_DMA_MEM_BUFFERABLE
+#if defined(CONFIG_ARM_DMA_MEM_BUFFERABLE) && defined(CONFIG_MC74_DMA_COHERENT_SO)
+/*
+ * MC74 experiment: the secure monitor leaves the PL310 "shared attribute
+ * override" clear, so Normal non-cacheable (bufferable) DMA memory can be
+ * cached in L2. Map DMA-coherent memory strongly ordered instead.
+ */
+#define pgprot_dmacoherent(prot) \
+	__pgprot_modify(prot, L_PTE_MT_MASK, L_PTE_MT_UNCACHED | L_PTE_XN)
+#define __HAVE_PHYS_MEM_ACCESS_PROT
+struct file;
+extern pgprot_t phys_mem_access_prot(struct file *file, unsigned long pfn,
+				     unsigned long size, pgprot_t vma_prot);
+#elif defined(CONFIG_ARM_DMA_MEM_BUFFERABLE)
 #define pgprot_dmacoherent(prot) \
 	__pgprot_modify(prot, L_PTE_MT_MASK, L_PTE_MT_BUFFERABLE | L_PTE_XN)
 #define __HAVE_PHYS_MEM_ACCESS_PROT
