@@ -28,6 +28,7 @@
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/clk.h>
+#include <linux/gpio.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <linux/seq_file.h>
@@ -46,6 +47,7 @@
 #define AUDIOH_PHYS		0x35020000
 #define AUDIOH_IHF_FIFO		(AUDIOH_PHYS + 0x5000)
 #define AUDIOH_VINR_FIFO	(AUDIOH_PHYS + 0x6800)
+#define AUDIOH_EP_FIFO		(AUDIOH_PHYS + 0x5800)	/* VOUT: handset earpiece */
 #define CFIFO_PHYS		0x3502d000
 
 #define RATE			48000
@@ -58,6 +60,10 @@
 #define CAP_CFIFO_ADDR		1024
 #define CAP_CFIFO_SIZE		32
 #define CAP_CFIFO_THRES1	32	/* AADMA_DEF_IGR_THRES1 */
+/* earpiece (mono) CFIFO after the capture one */
+#define EP_CFIFO_ADDR		1056
+#define EP_CFIFO_SIZE		512
+#define EP_CFIFO_THRES1		4
 #define CFIFO_THRES2		0
 #define AUDIOH_THRES1		4	/* AUDIOH_DEFAULT_THRES */
 #define AUDIOH_THRES2		2	/* AUDIOH_DEFAULT_THRES2 */
@@ -130,10 +136,11 @@ struct caph {
 	spinlock_t lock;
 
 	struct snd_card *card;
-	struct caph_stream pb, cap;
+	struct caph_stream pb, cap, ep;	/* speaker, mic, handset earpiece */
 	struct hrtimer poll;
 	int mic_gain, mic_sel;
-	bool spk_on;
+	bool spk_on, ep_on, hs_mic;
+	void __iomem *aci;		/* ACI/AUXMIC block: handset mic bias */
 	struct dentry *dbg;
 };
 
@@ -235,6 +242,13 @@ static void caph_hw_init(struct caph *c)
 	chal_audio_ihfpath_set_bits_per_sample(c->h_audio, 16);
 	chal_audio_ihfpath_clr_fifo(c->h_audio);
 
+	/* earpiece (VOUT): mono, unpacked, 16 bit */
+	chal_audio_earpath_dma_enable(c->h_audio, CHAL_AUDIO_ENABLE);
+	chal_audio_earpath_set_fifo_thres(c->h_audio, 2, 0);
+	chal_audio_earpath_set_pack(c->h_audio, 0);
+	chal_audio_earpath_set_bits_per_sample(c->h_audio, 16);
+	chal_audio_earpath_clr_fifo(c->h_audio);
+
 	/* VIN right: mono, unpacked, 16 bit */
 	chal_audio_vinpath_dma_enable(c->h_audio, CHAL_AUDIO_ENABLE);
 	chal_audio_vinpath_set_fifo_thres(c->h_audio, AUDIOH_THRES1, AUDIOH_THRES2);
@@ -276,7 +290,12 @@ static void mic_power(struct caph *c, bool on)
 
 static bool is_playback(struct caph *c, struct caph_stream *s)
 {
-	return s == &c->pb;
+	return s == &c->pb || s == &c->ep;
+}
+
+static bool is_ep(struct caph *c, struct caph_stream *s)
+{
+	return s == &c->ep;
 }
 
 /* aadma_request_channel + ssasw_request_channel for one direction */
@@ -304,18 +323,25 @@ static int stream_route(struct caph *c, struct caph_stream *s, dma_addr_t buf, s
 
 	chal_caph_dma_set_tsize(c->h_dma, s->dma_ch, AADMA_TSIZE);
 	chal_caph_dma_set_cfifo(c->h_dma, s->dma_ch, s->cfifo_ch);
-	chal_caph_cfifo_set_address(c->h_cfifo, s->cfifo_ch, pb ? PB_CFIFO_ADDR : CAP_CFIFO_ADDR);
+	chal_caph_cfifo_set_address(c->h_cfifo, s->cfifo_ch,
+				    is_ep(c, s) ? EP_CFIFO_ADDR : pb ? PB_CFIFO_ADDR : CAP_CFIFO_ADDR);
 	chal_caph_dma_set_direction(c->h_dma, s->dma_ch, dir);
 	chal_caph_cfifo_set_direction(c->h_cfifo, s->cfifo_ch, dir);
-	chal_caph_cfifo_set_size(c->h_cfifo, s->cfifo_ch, pb ? PB_CFIFO_SIZE : CAP_CFIFO_SIZE);
+	chal_caph_cfifo_set_size(c->h_cfifo, s->cfifo_ch,
+				 is_ep(c, s) ? EP_CFIFO_SIZE : pb ? PB_CFIFO_SIZE : CAP_CFIFO_SIZE);
 	chal_caph_cfifo_set_fifo_thres(c->h_cfifo, s->cfifo_ch,
-				       pb ? PB_CFIFO_THRES1 : CAP_CFIFO_THRES1, CFIFO_THRES2);
+				       is_ep(c, s) ? EP_CFIFO_THRES1 : pb ? PB_CFIFO_THRES1 : CAP_CFIFO_THRES1,
+				       CFIFO_THRES2);
 	chal_caph_dma_clr_channel_fifo(c->h_dma, s->dma_ch);
 	chal_caph_cfifo_clr_fifo(c->h_cfifo, s->cfifo_ch);
 
 	cfifo_addr = (u16)(CFIFO_PHYS + chal_caph_cfifo_get_fifo_addr_offset(c->h_cfifo, s->cfifo_ch));
 	chal_caph_switch_set_datafmt(c->h_sw, s->sw_ch, CAPH_MONO_16BIT);
-	if (pb) {
+	if (is_ep(c, s)) {
+		chal_caph_switch_select_trigger(c->h_sw, s->sw_ch, CAPH_EP_THR_MET);
+		chal_caph_switch_select_src(c->h_sw, s->sw_ch, cfifo_addr);
+		chal_caph_switch_add_dst(c->h_sw, s->sw_ch, (u16)AUDIOH_EP_FIFO);
+	} else if (pb) {
 		chal_caph_switch_select_trigger(c->h_sw, s->sw_ch, CAPH_IHF_THR_MET);
 		chal_caph_switch_select_src(c->h_sw, s->sw_ch, cfifo_addr);
 		chal_caph_switch_add_dst(c->h_sw, s->sw_ch, (u16)AUDIOH_IHF_FIFO);
@@ -359,7 +385,18 @@ static void stream_start(struct caph *c, struct caph_stream *s)
 	chal_caph_cfifo_enable(c->h_cfifo, s->cfifo_ch);
 	chal_caph_dma_enable(c->h_dma, s->dma_ch);
 
-	if (pb) {
+	if (is_ep(c, s)) {
+		/* csl_caph_audioh start + csl_caph_audioh_start_ep */
+		chal_audio_earpath_clr_fifo(c->h_audio);
+		chal_audio_earpath_mute(c->h_audio, 1);
+		chal_audio_earpath_clear_isolation_ctrl(c->h_audio, CHAL_AUDIO_AUDIOTX_ISO_IN);
+		chal_audio_earpath_set_dac_pwr(c->h_audio, CHAL_AUDIO_ENABLE);
+		chal_audio_earpath_set_gain(c->h_audio, 0);
+		chal_audio_earpath_set_drv_pwr(c->h_audio, CHAL_AUDIO_ENABLE);
+		chal_audio_earpath_enable(c->h_audio, CHAL_AUDIO_ENABLE);
+		chal_audio_earpath_set_slowramp_ctrl(c->h_audio, CHAL_AUDIO_AUDIOTX_SR_PUP_ED_DRV_TRIG);
+		chal_audio_earpath_mute(c->h_audio, !c->ep_on);
+	} else if (pb) {
 		chal_audio_ihfpath_clr_fifo(c->h_audio);
 		chal_audio_ihfpath_mute(c->h_audio, !c->spk_on);
 		chal_audio_ihfpath_set_dac_pwr(c->h_audio, CHAL_AUDIO_CHANNEL_LEFT | CHAL_AUDIO_CHANNEL_RIGHT);
@@ -376,7 +413,16 @@ static void stream_stop(struct caph *c, struct caph_stream *s)
 	if (!s->running)
 		return;
 	s->running = false;
-	if (is_playback(c, s)) {
+	if (is_ep(c, s)) {
+		chal_audio_earpath_mute(c->h_audio, 1);
+		chal_audio_earpath_set_drv_pwr(c->h_audio, 0);
+		chal_audio_earpath_set_dac_pwr(c->h_audio, 0);
+		chal_audio_earpath_enable(c->h_audio, 0);
+		chal_audio_earpath_clear_slowramp_ctrl(c->h_audio, CHAL_AUDIO_AUDIOTX_SR_PUP_ED_DRV_TRIG);
+		/* the EP DAC power-down also powers down the IHF DACs */
+		if (c->pb.running)
+			chal_audio_ihfpath_set_dac_pwr(c->h_audio, CHAL_AUDIO_CHANNEL_LEFT | CHAL_AUDIO_CHANNEL_RIGHT);
+	} else if (is_playback(c, s)) {
 		chal_audio_ihfpath_enable(c->h_audio, 0);
 		chal_audio_ihfpath_set_dac_pwr(c->h_audio, 0);
 	}
@@ -420,19 +466,22 @@ static bool stream_poll(struct caph *c, struct caph_stream *s)
 static enum hrtimer_restart caph_poll(struct hrtimer *t)
 {
 	struct caph *c = container_of(t, struct caph, poll);
-	bool pb_el, cap_el, any;
+	bool pb_el, cap_el, ep_el, any;
 	unsigned long flags;
 
 	spin_lock_irqsave(&c->lock, flags);
 	pb_el = stream_poll(c, &c->pb);
 	cap_el = stream_poll(c, &c->cap);
-	any = c->pb.running || c->cap.running;
+	ep_el = stream_poll(c, &c->ep);
+	any = c->pb.running || c->cap.running || c->ep.running;
 	spin_unlock_irqrestore(&c->lock, flags);
 
 	if (pb_el)
 		snd_pcm_period_elapsed(c->pb.substream);
 	if (cap_el)
 		snd_pcm_period_elapsed(c->cap.substream);
+	if (ep_el)
+		snd_pcm_period_elapsed(c->ep.substream);
 	if (!any)
 		return HRTIMER_NORESTART;
 	hrtimer_forward_now(t, ns_to_ktime(POLL_US * 1000));
@@ -458,6 +507,8 @@ static const struct snd_pcm_hardware caph_pcm_hw = {
 
 static struct caph_stream *sub_stream(struct caph *c, struct snd_pcm_substream *ss)
 {
+	if (ss->pcm->device == 1)
+		return &c->ep;
 	return ss->stream == SNDRV_PCM_STREAM_PLAYBACK ? &c->pb : &c->cap;
 }
 
@@ -470,7 +521,7 @@ static int caph_pcm_open(struct snd_pcm_substream *ss)
 
 	rt->hw = caph_pcm_hw;
 	rt->hw.channels_min = rt->hw.channels_max =
-		ss->stream == SNDRV_PCM_STREAM_PLAYBACK ? 2 : 1;
+		(ss->stream == SNDRV_PCM_STREAM_PLAYBACK && ss->pcm->device == 0) ? 2 : 1;
 	ret = snd_pcm_hw_constraint_step(rt, 0, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, 64);
 	if (ret < 0)
 		return ret;
@@ -529,7 +580,7 @@ static int caph_pcm_trigger(struct snd_pcm_substream *ss, int cmd)
 	spin_lock_irqsave(&c->lock, flags);
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
-		start_timer = !c->pb.running && !c->cap.running;
+		start_timer = !c->pb.running && !c->cap.running && !c->ep.running;
 		stream_start(c, s);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
@@ -652,7 +703,96 @@ static int spk_sw_put(struct snd_kcontrol *k, struct snd_ctl_elem_value *uv)
 	return 1;
 }
 
+static int ep_sw_get(struct snd_kcontrol *k, struct snd_ctl_elem_value *uv)
+{
+	struct caph *c = snd_kcontrol_chip(k);
+
+	uv->value.integer.value[0] = c->ep_on;
+	return 0;
+}
+
+static int ep_sw_put(struct snd_kcontrol *k, struct snd_ctl_elem_value *uv)
+{
+	struct caph *c = snd_kcontrol_chip(k);
+	bool on = !!uv->value.integer.value[0];
+	unsigned long flags;
+
+	if (on == c->ep_on)
+		return 0;
+	spin_lock_irqsave(&c->lock, flags);
+	c->ep_on = on;
+	if (c->ep.running)
+		chal_audio_earpath_mute(c->h_audio, !on);
+	spin_unlock_irqrestore(&c->lock, flags);
+	return 1;
+}
+
+/*
+ * Handset mic (stock "Handset/Headset Mic Switch"): GPIO 5 switches the
+ * Mic1 input from the handsfree mic to the handset mic, which is biased
+ * from the ACI/AUXMIC block (chal_audio_enable_aci_auxmic).
+ */
+#define MC74_HS_MIC_GPIO	5
+#define ACI_ADC_CTRL		0xd4
+#define  ACI_AUDIORX_VREF_BIAS	0xc0
+#define AUXMIC_CMC		0x0c
+#define AUXMIC_AUXEN		0x14
+#define AUXMIC_F_PWRDWN		0x28
+
+static void hs_mic_set(struct caph *c, bool on)
+{
+	void __iomem *a = c->aci;
+
+	if (!a)
+		return;
+	if (on) {
+		writel(readl(a + ACI_ADC_CTRL) | ACI_AUDIORX_VREF_BIAS, a + ACI_ADC_CTRL);
+		writel(readl(a + AUXMIC_AUXEN) | 1, a + AUXMIC_AUXEN);
+		writel(readl(a + AUXMIC_CMC) | 1, a + AUXMIC_CMC);
+		writel(readl(a + AUXMIC_F_PWRDWN) & ~1, a + AUXMIC_F_PWRDWN);
+	} else {
+		writel(readl(a + AUXMIC_F_PWRDWN) | 1, a + AUXMIC_F_PWRDWN);
+		writel(readl(a + AUXMIC_CMC) & ~1, a + AUXMIC_CMC);
+		writel(readl(a + AUXMIC_AUXEN) & ~1, a + AUXMIC_AUXEN);
+	}
+	gpio_set_value(MC74_HS_MIC_GPIO, on);
+}
+
+static int hs_mic_get(struct snd_kcontrol *k, struct snd_ctl_elem_value *uv)
+{
+	struct caph *c = snd_kcontrol_chip(k);
+
+	uv->value.integer.value[0] = c->hs_mic;
+	return 0;
+}
+
+static int hs_mic_put(struct snd_kcontrol *k, struct snd_ctl_elem_value *uv)
+{
+	struct caph *c = snd_kcontrol_chip(k);
+	bool on = !!uv->value.integer.value[0];
+
+	if (on == c->hs_mic)
+		return 0;
+	c->hs_mic = on;
+	hs_mic_set(c, on);
+	return 1;
+}
+
 static const struct snd_kcontrol_new caph_controls[] = {
+	{
+		.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
+		.name = "Handset Mic Switch",
+		.info = snd_ctl_boolean_mono_info,
+		.get = hs_mic_get,
+		.put = hs_mic_put,
+	},
+	{
+		.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
+		.name = "Handset Playback Switch",
+		.info = snd_ctl_boolean_mono_info,
+		.get = ep_sw_get,
+		.put = ep_sw_put,
+	},
 	{
 		.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
 		.name = "Speaker Playback Switch",
@@ -738,6 +878,7 @@ static int caph_probe(struct platform_device *pdev)
 	c->mic_gain = MIC_GAIN_DEFAULT;
 	c->mic_sel = MIC_SEL_DEFAULT;
 	c->spk_on = true;
+	c->ep_on = true;
 
 	c->audioh = map(0x35020000, 0x6000);
 	c->cfifo = map(0x3502d000, 0x1000);
@@ -754,6 +895,19 @@ static int caph_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 	caph_hw_init(c);
+	/*
+	 * Handset mic switch + bias block. The ACI block stalls the bus when
+	 * its APB clock is off, so only map it once the clock is enabled.
+	 */
+	if (!gpio_request(MC74_HS_MIC_GPIO, "handset-mic")) {
+		struct clk *aci_clk = clk_get(NULL, "aci_apb_clk");
+
+		gpio_direction_output(MC74_HS_MIC_GPIO, 0);
+		if (!IS_ERR(aci_clk) && !clk_enable(aci_clk))
+			c->aci = map(0x3500e000, 0x1000);
+		else
+			dev_warn(dev, "aci_apb_clk unavailable: no handset mic bias\n");
+	}
 	hrtimer_init(&c->poll, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	c->poll.function = caph_poll;
 
@@ -773,6 +927,15 @@ static int caph_probe(struct platform_device *pdev)
 	strlcpy(pcm->name, "MC74 speaker/mic", sizeof(pcm->name));
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &caph_pcm_ops);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &caph_pcm_ops);
+	snd_pcm_lib_preallocate_pages_for_all(pcm, SNDRV_DMA_TYPE_DEV, dev, 65536, 65536);
+
+	/* device 1: handset earpiece, mono playback */
+	ret = snd_pcm_new(card, "CAPH-EP", 1, 1, 0, &pcm);
+	if (ret)
+		goto err;
+	pcm->private_data = c;
+	strlcpy(pcm->name, "MC74 handset", sizeof(pcm->name));
+	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &caph_pcm_ops);
 	snd_pcm_lib_preallocate_pages_for_all(pcm, SNDRV_DMA_TYPE_DEV, dev, 65536, 65536);
 
 	for (i = 0; i < ARRAY_SIZE(caph_controls); i++) {
