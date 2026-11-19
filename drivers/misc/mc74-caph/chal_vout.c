@@ -38,8 +38,9 @@
 #include <mach/rdb/brcm_rdb_audioh.h>
 #include <chal/chal_util.h>
 
-/* MC74: the headset path is never used, so the shared DAC power is ours alone */
-#define chal_audio_isHSpath_active() 0
+Boolean chal_audio_isHSpath_active(void);
+Boolean chal_audio_isEPpath_active(void);
+
 
 /*
  * ****************************************************************************

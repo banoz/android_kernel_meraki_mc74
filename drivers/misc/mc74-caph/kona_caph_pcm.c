@@ -29,6 +29,9 @@
 #include <linux/module.h>
 #include <linux/clk.h>
 #include <linux/gpio.h>
+#include <linux/i2c.h>
+#include <linux/switch.h>
+#include <linux/workqueue.h>
 #include <linux/slab.h>
 #include <linux/platform_device.h>
 #include <linux/seq_file.h>
@@ -48,6 +51,7 @@
 #define AUDIOH_IHF_FIFO		(AUDIOH_PHYS + 0x5000)
 #define AUDIOH_VINR_FIFO	(AUDIOH_PHYS + 0x6800)
 #define AUDIOH_EP_FIFO		(AUDIOH_PHYS + 0x5800)	/* VOUT: handset earpiece */
+#define AUDIOH_HS_FIFO		(AUDIOH_PHYS + 0x4800)	/* stereo headset DAC */
 #define CFIFO_PHYS		0x3502d000
 
 #define RATE			48000
@@ -64,6 +68,10 @@
 #define EP_CFIFO_ADDR		1056
 #define EP_CFIFO_SIZE		512
 #define EP_CFIFO_THRES1		4
+/* headset (stereo) CFIFO after the earpiece one */
+#define HS_CFIFO_ADDR		1568
+#define HS_CFIFO_SIZE		1024
+#define HS_CFIFO_THRES1		4
 #define CFIFO_THRES2		0
 #define AUDIOH_THRES1		4	/* AUDIOH_DEFAULT_THRES */
 #define AUDIOH_THRES2		2	/* AUDIOH_DEFAULT_THRES2 */
@@ -136,10 +144,15 @@ struct caph {
 	spinlock_t lock;
 
 	struct snd_card *card;
-	struct caph_stream pb, cap, ep;	/* speaker, mic, handset earpiece */
+	struct caph_stream pb, cap, ep, hs;	/* speaker, mic, handset earpiece, headset */
 	struct hrtimer poll;
 	int mic_gain, mic_sel;
 	bool spk_on, ep_on, hs_mic;
+	/* headset jack: TS3A227E on I2C bus 2, polled */
+	struct i2c_client *jack;
+	struct switch_dev h2w;
+	struct delayed_work jack_work;
+	int jack_state;
 	void __iomem *aci;		/* ACI/AUXMIC block: handset mic bias */
 	struct dentry *dbg;
 };
@@ -242,6 +255,14 @@ static void caph_hw_init(struct caph *c)
 	chal_audio_ihfpath_set_bits_per_sample(c->h_audio, 16);
 	chal_audio_ihfpath_clr_fifo(c->h_audio);
 
+	/* headset: stereo, unpacked, 16 bit */
+	chal_audio_hspath_dma_enable(c->h_audio, CHAL_AUDIO_ENABLE);
+	chal_audio_hspath_set_fifo_thres(c->h_audio, 2, 0);
+	chal_audio_hspath_set_mono_stereo(c->h_audio, 0);
+	chal_audio_hspath_set_pack(c->h_audio, 0);
+	chal_audio_hspath_set_bits_per_sample(c->h_audio, 16);
+	chal_audio_hspath_clr_fifo(c->h_audio);
+
 	/* earpiece (VOUT): mono, unpacked, 16 bit */
 	chal_audio_earpath_dma_enable(c->h_audio, CHAL_AUDIO_ENABLE);
 	chal_audio_earpath_set_fifo_thres(c->h_audio, 2, 0);
@@ -290,7 +311,12 @@ static void mic_power(struct caph *c, bool on)
 
 static bool is_playback(struct caph *c, struct caph_stream *s)
 {
-	return s == &c->pb || s == &c->ep;
+	return s == &c->pb || s == &c->ep || s == &c->hs;
+}
+
+static bool is_hs(struct caph *c, struct caph_stream *s)
+{
+	return s == &c->hs;
 }
 
 static bool is_ep(struct caph *c, struct caph_stream *s)
@@ -324,20 +350,27 @@ static int stream_route(struct caph *c, struct caph_stream *s, dma_addr_t buf, s
 	chal_caph_dma_set_tsize(c->h_dma, s->dma_ch, AADMA_TSIZE);
 	chal_caph_dma_set_cfifo(c->h_dma, s->dma_ch, s->cfifo_ch);
 	chal_caph_cfifo_set_address(c->h_cfifo, s->cfifo_ch,
-				    is_ep(c, s) ? EP_CFIFO_ADDR : pb ? PB_CFIFO_ADDR : CAP_CFIFO_ADDR);
+				    is_hs(c, s) ? HS_CFIFO_ADDR : is_ep(c, s) ? EP_CFIFO_ADDR :
+				    pb ? PB_CFIFO_ADDR : CAP_CFIFO_ADDR);
 	chal_caph_dma_set_direction(c->h_dma, s->dma_ch, dir);
 	chal_caph_cfifo_set_direction(c->h_cfifo, s->cfifo_ch, dir);
 	chal_caph_cfifo_set_size(c->h_cfifo, s->cfifo_ch,
-				 is_ep(c, s) ? EP_CFIFO_SIZE : pb ? PB_CFIFO_SIZE : CAP_CFIFO_SIZE);
+				 is_hs(c, s) ? HS_CFIFO_SIZE : is_ep(c, s) ? EP_CFIFO_SIZE :
+				 pb ? PB_CFIFO_SIZE : CAP_CFIFO_SIZE);
 	chal_caph_cfifo_set_fifo_thres(c->h_cfifo, s->cfifo_ch,
-				       is_ep(c, s) ? EP_CFIFO_THRES1 : pb ? PB_CFIFO_THRES1 : CAP_CFIFO_THRES1,
+				       is_hs(c, s) ? HS_CFIFO_THRES1 : is_ep(c, s) ? EP_CFIFO_THRES1 :
+				       pb ? PB_CFIFO_THRES1 : CAP_CFIFO_THRES1,
 				       CFIFO_THRES2);
 	chal_caph_dma_clr_channel_fifo(c->h_dma, s->dma_ch);
 	chal_caph_cfifo_clr_fifo(c->h_cfifo, s->cfifo_ch);
 
 	cfifo_addr = (u16)(CFIFO_PHYS + chal_caph_cfifo_get_fifo_addr_offset(c->h_cfifo, s->cfifo_ch));
 	chal_caph_switch_set_datafmt(c->h_sw, s->sw_ch, CAPH_MONO_16BIT);
-	if (is_ep(c, s)) {
+	if (is_hs(c, s)) {
+		chal_caph_switch_select_trigger(c->h_sw, s->sw_ch, CAPH_HS_THR_MET);
+		chal_caph_switch_select_src(c->h_sw, s->sw_ch, cfifo_addr);
+		chal_caph_switch_add_dst(c->h_sw, s->sw_ch, (u16)AUDIOH_HS_FIFO);
+	} else if (is_ep(c, s)) {
 		chal_caph_switch_select_trigger(c->h_sw, s->sw_ch, CAPH_EP_THR_MET);
 		chal_caph_switch_select_src(c->h_sw, s->sw_ch, cfifo_addr);
 		chal_caph_switch_add_dst(c->h_sw, s->sw_ch, (u16)AUDIOH_EP_FIFO);
@@ -385,7 +418,13 @@ static void stream_start(struct caph *c, struct caph_stream *s)
 	chal_caph_cfifo_enable(c->h_cfifo, s->cfifo_ch);
 	chal_caph_dma_enable(c->h_dma, s->dma_ch);
 
-	if (is_ep(c, s)) {
+	if (is_hs(c, s)) {
+		chal_audio_hspath_clr_fifo(c->h_audio);
+		chal_audio_hspath_set_dac_pwr(c->h_audio, CHAL_AUDIO_CHANNEL_LEFT | CHAL_AUDIO_CHANNEL_RIGHT);
+		chal_audio_hspath_set_gain(c->h_audio, 0);
+		chal_audio_hspath_mute(c->h_audio, 0);
+		chal_audio_hspath_enable(c->h_audio, CHAL_AUDIO_CHANNEL_LEFT | CHAL_AUDIO_CHANNEL_RIGHT);
+	} else if (is_ep(c, s)) {
 		/* csl_caph_audioh start + csl_caph_audioh_start_ep */
 		chal_audio_earpath_clr_fifo(c->h_audio);
 		chal_audio_earpath_mute(c->h_audio, 1);
@@ -413,7 +452,11 @@ static void stream_stop(struct caph *c, struct caph_stream *s)
 	if (!s->running)
 		return;
 	s->running = false;
-	if (is_ep(c, s)) {
+	if (is_hs(c, s)) {
+		chal_audio_hspath_mute(c->h_audio, 1);
+		chal_audio_hspath_enable(c->h_audio, 0);
+		chal_audio_hspath_set_dac_pwr(c->h_audio, 0);
+	} else if (is_ep(c, s)) {
 		chal_audio_earpath_mute(c->h_audio, 1);
 		chal_audio_earpath_set_drv_pwr(c->h_audio, 0);
 		chal_audio_earpath_set_dac_pwr(c->h_audio, 0);
@@ -466,14 +509,15 @@ static bool stream_poll(struct caph *c, struct caph_stream *s)
 static enum hrtimer_restart caph_poll(struct hrtimer *t)
 {
 	struct caph *c = container_of(t, struct caph, poll);
-	bool pb_el, cap_el, ep_el, any;
+	bool pb_el, cap_el, ep_el, hs_el, any;
 	unsigned long flags;
 
 	spin_lock_irqsave(&c->lock, flags);
 	pb_el = stream_poll(c, &c->pb);
 	cap_el = stream_poll(c, &c->cap);
 	ep_el = stream_poll(c, &c->ep);
-	any = c->pb.running || c->cap.running || c->ep.running;
+	hs_el = stream_poll(c, &c->hs);
+	any = c->pb.running || c->cap.running || c->ep.running || c->hs.running;
 	spin_unlock_irqrestore(&c->lock, flags);
 
 	if (pb_el)
@@ -482,6 +526,8 @@ static enum hrtimer_restart caph_poll(struct hrtimer *t)
 		snd_pcm_period_elapsed(c->cap.substream);
 	if (ep_el)
 		snd_pcm_period_elapsed(c->ep.substream);
+	if (hs_el)
+		snd_pcm_period_elapsed(c->hs.substream);
 	if (!any)
 		return HRTIMER_NORESTART;
 	hrtimer_forward_now(t, ns_to_ktime(POLL_US * 1000));
@@ -509,6 +555,8 @@ static struct caph_stream *sub_stream(struct caph *c, struct snd_pcm_substream *
 {
 	if (ss->pcm->device == 1)
 		return &c->ep;
+	if (ss->pcm->device == 2)
+		return &c->hs;
 	return ss->stream == SNDRV_PCM_STREAM_PLAYBACK ? &c->pb : &c->cap;
 }
 
@@ -521,7 +569,7 @@ static int caph_pcm_open(struct snd_pcm_substream *ss)
 
 	rt->hw = caph_pcm_hw;
 	rt->hw.channels_min = rt->hw.channels_max =
-		(ss->stream == SNDRV_PCM_STREAM_PLAYBACK && ss->pcm->device == 0) ? 2 : 1;
+		(ss->stream == SNDRV_PCM_STREAM_PLAYBACK && ss->pcm->device != 1) ? 2 : 1;
 	ret = snd_pcm_hw_constraint_step(rt, 0, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, 64);
 	if (ret < 0)
 		return ret;
@@ -580,7 +628,7 @@ static int caph_pcm_trigger(struct snd_pcm_substream *ss, int cmd)
 	spin_lock_irqsave(&c->lock, flags);
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
-		start_timer = !c->pb.running && !c->cap.running && !c->ep.running;
+		start_timer = !c->pb.running && !c->cap.running && !c->ep.running && !c->hs.running;
 		stream_start(c, s);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
@@ -855,6 +903,58 @@ static const struct file_operations status_fops = {
 	.release = single_release,
 };
 
+/* ---- headset jack (TS3A227E) ---- */
+
+#define TS3A227E_ADDR		0x3b
+#define TS3A227E_INTERRUPT	0x01
+#define TS3A227E_ACC_STATUS	0x0b
+#define JACK_POLL_MS		300
+
+/*
+ * Accessory status as seen on the MC74: 0 = nothing, 0x0c = 4-pole headset
+ * with mic. Anything else plugged is reported as headphones. h2w states
+ * are what Android's WiredAccessoryManager expects: 1 headset, 2 headphone.
+ */
+static void jack_work_fn(struct work_struct *w)
+{
+	struct caph *c = container_of(w, struct caph, jack_work.work);
+	int st = i2c_smbus_read_byte_data(c->jack, TS3A227E_ACC_STATUS);
+	int state;
+
+	if (st >= 0) {
+		(void)i2c_smbus_read_byte_data(c->jack, TS3A227E_INTERRUPT);	/* clear */
+		state = !st ? 0 : (st & 0x0c) == 0x0c ? 1 : 2;
+		if (state != c->jack_state) {
+			c->jack_state = state;
+			switch_set_state(&c->h2w, state);
+			dev_info(c->dev, "jack: %s (status %#x)\n",
+				 state == 1 ? "headset" : state == 2 ? "headphones" : "unplugged", st);
+		}
+	}
+	schedule_delayed_work(&c->jack_work, msecs_to_jiffies(JACK_POLL_MS));
+}
+
+static void jack_init(struct caph *c)
+{
+	struct i2c_adapter *adap = i2c_get_adapter(2);
+
+	if (!adap)
+		return;
+	c->jack = i2c_new_dummy(adap, TS3A227E_ADDR);
+	i2c_put_adapter(adap);
+	if (!c->jack)
+		return;
+	c->h2w.name = "h2w";
+	if (switch_dev_register(&c->h2w)) {
+		i2c_unregister_device(c->jack);
+		c->jack = NULL;
+		return;
+	}
+	c->jack_state = -1;
+	INIT_DELAYED_WORK(&c->jack_work, jack_work_fn);
+	schedule_delayed_work(&c->jack_work, msecs_to_jiffies(JACK_POLL_MS));
+}
+
 /* ---- probe ---- */
 
 static void __iomem *map(phys_addr_t pa, size_t len)
@@ -929,6 +1029,15 @@ static int caph_probe(struct platform_device *pdev)
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &caph_pcm_ops);
 	snd_pcm_lib_preallocate_pages_for_all(pcm, SNDRV_DMA_TYPE_DEV, dev, 65536, 65536);
 
+	/* device 2: headset, stereo playback */
+	ret = snd_pcm_new(card, "CAPH-HS", 2, 1, 0, &pcm);
+	if (ret)
+		goto err;
+	pcm->private_data = c;
+	strlcpy(pcm->name, "MC74 headset", sizeof(pcm->name));
+	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &caph_pcm_ops);
+	snd_pcm_lib_preallocate_pages_for_all(pcm, SNDRV_DMA_TYPE_DEV, dev, 65536, 65536);
+
 	/* device 1: handset earpiece, mono playback */
 	ret = snd_pcm_new(card, "CAPH-EP", 1, 1, 0, &pcm);
 	if (ret)
@@ -951,6 +1060,7 @@ static int caph_probe(struct platform_device *pdev)
 	c->dbg = debugfs_create_dir("mc74_caph", NULL);
 	debugfs_create_file("status", 0444, c->dbg, c, &status_fops);
 	platform_set_drvdata(pdev, c);
+	jack_init(c);
 	dev_info(dev, "MC74 sound card registered (speaker playback, mic capture)\n");
 	return 0;
 err:
